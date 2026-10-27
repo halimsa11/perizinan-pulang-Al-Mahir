@@ -1,0 +1,18 @@
+{
+  "name": "izin-pulang",
+  "version": "1.0.0",
+  "description": "Siswa mengajukan izin pulang bulanan, orang tua menandatangani langsung di layar HP, lalu pihak sekolah menyetujui. Semua pihak melihat status secara real time, tanpa form kertas.",
+  "main": "app.js",
+  "scripts": {
+    "dev": "serve . -l 3000 --cors",
+    "start": "serve . -l 3000 --cors",
+    "build": "echo \"Static site — no build step needed.\""
+  },
+  "private": true,
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "serve": "^14.2.6"
+  }
+}

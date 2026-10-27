@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function role() {
+      return me().role;
+    }
+
+    // Profil pengguna.
+    // Peran "wali" (sekolah) TIDAK bisa dibuat dari aplikasi; tambahkan manual lewat Firebase Console.
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || role() == 'wali');
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role in ['siswa', 'ortu']
+        && request.resource.data.keys().hasOnly(
+             ['role', 'nama', 'username', 'nis', 'kelas', 'childNis', 'createdAt']);
+      allow update, delete: if false;
+    }
+
+    // Pengajuan izin pulang. ID dokumen = uidSiswa_YYYY-MM (satu izin per siswa per bulan).
+    match /izin/{izinId} {
+      allow read: if signedIn() && (
+        resource.data.siswaUid == request.auth.uid
+        || role() == 'wali'
+        || (role() == 'ortu' && resource.data.nis == me().childNis)
+      );
+
+      // Siswa membuat pengajuan untuk dirinya sendiri
+      allow create: if signedIn()
+        && role() == 'siswa'
+        && request.resource.data.siswaUid == request.auth.uid
+        && request.resource.data.nis == me().nis
+        && izinId == request.auth.uid + '_' + request.resource.data.bulan
+        && request.resource.data.status == 'menunggu_ortu';
+
+      allow update: if signedIn() && (
+        // Orang tua: menandatangani atau menolak
+        (role() == 'ortu'
+          && resource.data.nis == me().childNis
+          && resource.data.status == 'menunggu_ortu'
+          && request.resource.data.status in ['menunggu_wali', 'ditolak_ortu']
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'ttdOrtu', 'ortuNama', 'ortuUid', 'ortuAt', 'catatanOrtu']))
+        ||
+        // Sekolah: menyetujui atau menolak setelah orang tua menandatangani
+        (role() == 'wali'
+          && resource.data.status == 'menunggu_wali'
+          && request.resource.data.status in ['disetujui', 'ditolak_wali']
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'waliNama', 'waliUid', 'waliAt', 'catatanWali']))
+      );
+
+      // Siswa boleh menghapus pengajuannya yang ditolak agar bisa mengajukan ulang
+      allow delete: if signedIn()
+        && resource.data.siswaUid == request.auth.uid
+        && resource.data.status in ['ditolak_ortu', 'ditolak_wali'];
+    }
+  }
+}
